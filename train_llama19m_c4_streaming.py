@@ -7,12 +7,7 @@ from typing import Dict, Iterable, Iterator, Optional
 import torch
 from datasets import load_dataset
 from torch.utils.data import DataLoader, IterableDataset
-from transformers import (
-    AutoTokenizer,
-    LlamaConfig,
-    LlamaForCausalLM,
-    get_linear_schedule_with_warmup,
-)
+from transformers import AutoTokenizer, LlamaConfig, LlamaForCausalLM, get_linear_schedule_with_warmup
 
 
 @dataclass
@@ -79,22 +74,40 @@ class C4TokenStreamDataset(IterableDataset):
                     return
 
 
-def build_llama_19m(vocab_size: int) -> LlamaForCausalLM:
-    """构建约 19M 参数量的 LLaMA 模型。"""
+MODEL_CONFIGS = {
+    "19m": {
+        "hidden_size": 384,
+        "intermediate_size": 1536,
+        "num_hidden_layers": 12,
+        "num_attention_heads": 6,
+        "num_key_value_heads": 6,
+    },
+    "1b": {
+        # 近似 TinyLlama 1.1B 量级，便于在同一套训练脚本上扩展到 1B。
+        "hidden_size": 2048,
+        "intermediate_size": 5632,
+        "num_hidden_layers": 22,
+        "num_attention_heads": 32,
+        "num_key_value_heads": 4,
+    },
+}
+
+
+def build_llama(vocab_size: int, model_size: str) -> LlamaForCausalLM:
+    """按预设规模构建 LLaMA 模型（19M 或 1B）。"""
+    if model_size not in MODEL_CONFIGS:
+        raise ValueError(f"Unsupported model_size: {model_size}")
+
     config = LlamaConfig(
         vocab_size=vocab_size,
-        hidden_size=384,
-        intermediate_size=1536,
-        num_hidden_layers=12,
-        num_attention_heads=6,
         max_position_embeddings=2048,
         rms_norm_eps=1e-6,
         pad_token_id=0,
         bos_token_id=1,
         eos_token_id=2,
+        **MODEL_CONFIGS[model_size],
     )
-    model = LlamaForCausalLM(config)
-    return model
+    return LlamaForCausalLM(config)
 
 
 def collate_fn(batch):
@@ -137,7 +150,7 @@ def train(args):
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    model = build_llama_19m(vocab_size=len(tokenizer))
+    model = build_llama(vocab_size=len(tokenizer), model_size=args.model_size)
     model.to(device)
 
     num_params = sum(p.numel() for p in model.parameters())
@@ -248,9 +261,10 @@ def train(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="C4 流式训练 LLaMA-19M 示例")
+    parser = argparse.ArgumentParser(description="C4 流式训练 LLaMA（19M/1B）示例")
     parser.add_argument("--tokenizer_name", type=str, default="hf-internal-testing/llama-tokenizer")
-    parser.add_argument("--output_dir", type=str, default="./checkpoints/llama19m_c4")
+    parser.add_argument("--output_dir", type=str, default="./checkpoints/llama_c4")
+    parser.add_argument("--model_size", type=str, choices=sorted(MODEL_CONFIGS.keys()), default="1b")
     parser.add_argument("--seq_len", type=int, default=512)
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--eval_batch_size", type=int, default=8)
