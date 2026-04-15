@@ -1,9 +1,9 @@
 # LLM_Training_Example
 
-一个基于 **C4 流式数据集** 训练 **LLaMA ~19M 参数模型** 的最小示例，包含：
+一个基于 **C4 流式数据集** 训练 **LLaMA（支持 19M / 1B）** 的最小示例，包含：
 
 - 使用 `datasets` 的 streaming 模式读取 C4。
-- 构建约 19M 参数量的 LLaMA 模型。
+- 支持构建约 19M 或 1B 参数量的 LLaMA 模型。
 - 训练 token 总量按“模型参数量的 4 倍”自动计算。
 - 统计训练过程中累计梯度数据量（元素总数与字节大小）。
 - 使用 perplexity（困惑度）在验证集上评估模型性能。
@@ -18,12 +18,21 @@ pip install torch transformers datasets sentencepiece
 
 ```bash
 python train_llama19m_c4_streaming.py \
+  --model_size 1b \
   --seq_len 512 \
   --batch_size 8 \
   --grad_accum_steps 4 \
   --epochs 1 \
   --target_multiplier 4
 ```
+
+如果你只想快速验证脚本流程、降低资源占用，可切回 19M 配置：
+
+```bash
+python train_llama19m_c4_streaming.py --model_size 19m
+```
+
+> 说明：`--model_size 1b` 为默认值，参数规模接近 TinyLlama 1.1B 量级。
 
 ## 关键输出
 
